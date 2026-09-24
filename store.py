@@ -3,14 +3,18 @@
 Note lifecycle:  new -> discarded | held | queued -> drafted
 """
 import json
+import os
 import sqlite3
 from datetime import datetime, timezone
 
 import config
 
+# Postgres on Vercel (Neon sets DATABASE_URL / POSTGRES_URL); SQLite locally.
+PG_URL = os.getenv("DATABASE_URL") or os.getenv("POSTGRES_URL")
+
 SCHEMA = """
 CREATE TABLE IF NOT EXISTS notes (
-    id            INTEGER PRIMARY KEY AUTOINCREMENT,
+    id            {pk},
     source        TEXT NOT NULL,              -- 'dm', 'channel', 'backlog'
     source_ref    TEXT UNIQUE,                -- dedupe key, e.g. chat:message_id
     text          TEXT NOT NULL,
@@ -18,10 +22,10 @@ CREATE TABLE IF NOT EXISTS notes (
     status        TEXT NOT NULL DEFAULT 'new',
     score         INTEGER,
     triage_json   TEXT,
-    ack_msg_id    INTEGER                     -- bot's reply, so Meera can reply to it
+    ack_msg_id    BIGINT                      -- bot's reply, so Meera can reply to it
 );
 CREATE TABLE IF NOT EXISTS drafts (
-    id            INTEGER PRIMARY KEY AUTOINCREMENT,
+    id            {pk},
     note_id       INTEGER NOT NULL REFERENCES notes(id),
     created_at    TEXT NOT NULL,
     reference_json TEXT,
@@ -37,24 +41,54 @@ def now_iso():
     return datetime.now(timezone.utc).isoformat(timespec="seconds")
 
 
+class _Pg:
+    """Just enough of the sqlite3 connection interface over psycopg."""
+
+    def __init__(self, url):
+        import psycopg
+        from psycopg.rows import dict_row
+        self._conn = psycopg.connect(url, autocommit=True, row_factory=dict_row)
+
+    def execute(self, sql, params=()):
+        return self._conn.execute(sql.replace("?", "%s"), params)
+
+    def commit(self):
+        pass  # autocommit
+
+    def close(self):
+        self._conn.close()
+
+
 def connect():
+    if PG_URL:
+        conn = _Pg(PG_URL)
+        for stmt in SCHEMA.format(pk="SERIAL PRIMARY KEY").split(";"):
+            if stmt.strip():
+                conn.execute(stmt)
+        return conn
     conn = sqlite3.connect(config.DB_PATH)
     conn.row_factory = sqlite3.Row
-    conn.executescript(SCHEMA)
+    conn.executescript(SCHEMA.format(pk="INTEGER PRIMARY KEY AUTOINCREMENT"))
     return conn
 
 
 def add_note(conn, source, source_ref, text, received_at=None):
     """Returns the new note id, or None if this message was already stored."""
-    try:
-        cur = conn.execute(
-            "INSERT INTO notes (source, source_ref, text, received_at) VALUES (?, ?, ?, ?)",
-            (source, source_ref, text.strip(), received_at or now_iso()),
-        )
-        conn.commit()
-        return cur.lastrowid
-    except sqlite3.IntegrityError:
-        return None
+    row = conn.execute(
+        "INSERT INTO notes (source, source_ref, text, received_at) VALUES (?, ?, ?, ?) "
+        "ON CONFLICT (source_ref) DO NOTHING RETURNING id",
+        (source, source_ref, text.strip(), received_at or now_iso()),
+    ).fetchone()
+    conn.commit()
+    return row["id"] if row else None
+
+
+def claim(conn, key):
+    """True the first time a key is seen - used to ignore Telegram webhook retries."""
+    row = conn.execute("INSERT INTO kv (k, v) VALUES (?, ?) ON CONFLICT (k) DO NOTHING RETURNING k",
+                       (key, now_iso())).fetchone()
+    conn.commit()
+    return row is not None
 
 
 def get_note(conn, note_id):
@@ -97,13 +131,14 @@ def queued(conn, limit=20):
 
 
 def add_draft(conn, note_id, reference, body, issues, feedback=None):
-    cur = conn.execute(
-        "INSERT INTO drafts (note_id, created_at, reference_json, body, issues_json, feedback) VALUES (?, ?, ?, ?, ?, ?)",
+    row = conn.execute(
+        "INSERT INTO drafts (note_id, created_at, reference_json, body, issues_json, feedback) "
+        "VALUES (?, ?, ?, ?, ?, ?) RETURNING id",
         (note_id, now_iso(), json.dumps(reference), body, json.dumps(issues), feedback),
-    )
+    ).fetchone()
     conn.execute("UPDATE notes SET status = 'drafted' WHERE id = ?", (note_id,))
     conn.commit()
-    return cur.lastrowid
+    return row["id"]
 
 
 def latest_draft(conn, note_id):

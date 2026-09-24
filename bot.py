@@ -141,10 +141,20 @@ def scheduled_delivery(conn):
         return
     if now.strftime("%H:%M") < config.DELIVERY_TIME or store.kv_get(conn, "last_delivery") == today:
         return
+    deliver_next(conn)
+
+
+def deliver_next(conn):
+    """Draft the strongest queued note, at most once per day."""
+    today = _now().date().isoformat()
+    if store.kv_get(conn, "last_delivery") == today:
+        return "already delivered today"
     store.kv_set(conn, "last_delivery", today)
     top = store.queued(conn, limit=1)
-    if top:
-        deliver(conn, top[0]["id"])
+    if not top:
+        return "queue empty"
+    deliver(conn, top[0]["id"])
+    return f"drafted note {top[0]['id']}"
 
 
 # ---------------------------------------------------------------- commands

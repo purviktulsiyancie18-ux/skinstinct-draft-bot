@@ -1,0 +1,6 @@
+.venv
+.env
+*.db
+bot.log
+*.pdf
+*.docx
