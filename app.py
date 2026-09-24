@@ -1,6 +1,6 @@
 """Vercel entry point: the same bot, driven by a Telegram webhook instead of polling.
 
-    POST /telegram       Telegram delivers each update here (checked against TELEGRAM_WEBHOOK_SECRET)
+    POST /api/webhook    Telegram delivers each update here (/telegram also works) (checked against TELEGRAM_WEBHOOK_SECRET)
     GET  /cron/deliver   Vercel Cron, Mon/Wed/Fri 08:30 IST (checked against CRON_SECRET)
     GET  /               health check
 
@@ -29,6 +29,7 @@ def health():
                    database="postgres" if store.PG_URL else "sqlite (temporary - attach Postgres)")
 
 
+@app.post("/api/webhook")
 @app.post("/telegram")
 def telegram_webhook():
     if not _secret_ok(request.headers.get("X-Telegram-Bot-Api-Secret-Token"), config.TELEGRAM_WEBHOOK_SECRET):

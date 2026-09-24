@@ -75,7 +75,7 @@ The news hook has to be current when she reads the draft. A note queued for a we
 
 ## Hosting on Vercel
 
-`app.py` is the Vercel entry point. It runs the same bot through a Telegram webhook (`POST /telegram`) and a Vercel Cron job (`/cron/deliver`, Mon/Wed/Fri 03:00 UTC = 08:30 IST) instead of the polling loop.
+`app.py` is the Vercel entry point. It runs the same bot through a Telegram webhook (`POST /api/webhook`) and a Vercel Cron job (`/cron/deliver`, Mon/Wed/Fri 03:00 UTC = 08:30 IST) instead of the polling loop.
 
 1. Import the repo in Vercel (framework preset: Other). `requirements.txt` is picked up automatically.
 2. **Storage → Create Database → Neon (Postgres)** and connect it to the project. This sets `DATABASE_URL`. Without it, notes live in `/tmp` and are lost between requests.
@@ -85,6 +85,12 @@ The news hook has to be current when she reads the draft. A note queued for a we
 
 ```bash
 .venv/bin/python set_webhook.py https://<project>.vercel.app
+```
+
+Or in a browser (the `secret_token` must equal `TELEGRAM_WEBHOOK_SECRET`, or every update gets a 403):
+
+```
+https://api.telegram.org/bot<TOKEN>/setWebhook?url=https://<project>.vercel.app/api/webhook&secret_token=<TELEGRAM_WEBHOOK_SECRET>
 ```
 
 To go back to running locally: `set_webhook.py --delete`, then `python bot.py`.

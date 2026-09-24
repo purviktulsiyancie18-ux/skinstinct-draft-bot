@@ -18,7 +18,7 @@ def main():
         print("Webhook removed. Run `python bot.py` to poll locally.")
         return
     config.require("TELEGRAM_WEBHOOK_SECRET")
-    url = sys.argv[1].rstrip("/") + "/telegram"
+    url = sys.argv[1].rstrip("/") + "/api/webhook"
     tg._call("setWebhook", url=url, secret_token=config.TELEGRAM_WEBHOOK_SECRET,
              allowed_updates=["message", "channel_post"], drop_pending_updates=False)
     info = tg._call("getWebhookInfo")
