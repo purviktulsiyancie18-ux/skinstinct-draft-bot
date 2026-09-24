@@ -1,0 +1,5 @@
+google-genai>=1.40
+requests>=2.31
+python-dotenv>=1.0
+pydantic>=2.0
+pypdf>=4.0

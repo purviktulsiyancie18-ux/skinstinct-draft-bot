@@ -1,0 +1,10 @@
+.env
+.venv/
+*.db
+bot.log
+__pycache__/
+*.pyc
+.DS_Store
+# course materials (the voice samples extracted from the PDF live in voice/published/)
+*.pdf
+*.docx
