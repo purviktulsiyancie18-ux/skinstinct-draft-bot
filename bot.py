@@ -53,11 +53,11 @@ def process(note, heard=False, force=False):
     heard_line = f"Heard: \"{note}\"\n\n" if heard else ""
 
     if not force and t.verdict == "hold":
-        return owner_send(f"{HOLDING} {t.reason}\n\nTo make it a post: {t.missing}\n"
+        return owner_send(f"{HOLDING} ({t.score}/10) {t.reason}\n\nTo make it a post: {t.missing}\n"
                           f"Reply to this message with that and I'll re-check, or reply \"draft it\"."
                           f"{NOTE_MARKER}{note}")
     if not force and t.verdict == "discard":
-        return owner_send(f"{NOT_A_POST} {t.reason}\n\nReply \"draft it\" if you disagree, "
+        return owner_send(f"{NOT_A_POST} ({t.score}/10) {t.reason}\n\nReply \"draft it\" if you disagree, "
                           f"or reply with more detail and I'll re-check.{NOTE_MARKER}{note}")
 
     owner_send(f"{heard_line}{WORKING} ({t.score}/10, {t.category}): {t.angle}\n\nDrafting now - about a minute.")

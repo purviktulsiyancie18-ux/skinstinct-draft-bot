@@ -85,6 +85,7 @@ class Triage(BaseModel):
     angle: str = Field(description="If develop/hold: the gap between belief and reality the post would explain, one sentence")
     category: str = Field(description="Ingredient Deep-Dive | Founder Story | India-Specific Context | Industry Transparency | Formulation Science | Consumer Education | Brand Philosophy")
     missing: str = Field(description="If hold: the one specific thing she'd need to add (a number, the date, what happened). Else empty")
+    already_said: str = Field(description="If her published pieces already cover this topic: which piece(s) and the points they made, so the draft doesn't repeat them. Else empty")
     search_queries: List[str] = Field(description="If develop: 2-3 short Google News queries of 2-5 keywords, from specific to broad (e.g. 'SPF labelling India', 'sunscreen regulation India', 'Indian skincare market'), to find a current news hook. Else empty list")
 
 
@@ -106,12 +107,19 @@ HOLD if the core is promising but it's too thin to draft without inventing the
 substance (e.g. "that thing the CM said about pH" with no detail). Name exactly
 what's missing in `missing`.
 
-DISCARD if it is: a to-do or logistics note; a pure feeling with no insight; a
-sales, launch or discount idea; a hot take requiring medical authority; an attack
-on a named competitor or person; a duplicate of what her published pieces already
-say with nothing new; or otherwise not publishable in any form.
+DISCARD only if it is: a to-do or logistics note; a pure feeling with no insight;
+a sales, launch or discount idea; a hot take requiring medical authority; an
+attack on a named competitor or person; a near-copy of one of her published
+pieces with nothing new; or otherwise not publishable in any form.
 
-Be conservative: a weak draft costs her more time than no draft. Scores of 8+
+A topic she has written about before is NOT a reason to discard. If the fragment
+adds anything new - a tension, a commercial angle, an example, a different
+audience (founders, customers), a question she is wrestling with - choose DEVELOP,
+make `angle` the NEW angle (propose one if she says she can't find it), and put
+what her earlier pieces already said in `already_said` so the draft moves past it.
+
+Lean towards DEVELOP when there is enough real substance for her to review a
+draft; she can always reject it. Scores of 8+
 should be rare and reserved for fragments with a concrete hook and a clear gap.
 
 FRAGMENT (received {received}):
@@ -240,6 +248,8 @@ HER RAW NOTE:
 
 EDITORIAL ANGLE: {angle}
 CATEGORY: {category}
+ALREADY PUBLISHED ON THIS TOPIC (build on it, don't repeat it; a brief nod such as
+"I've written before about..." is fine): {already_said}
 
 CURRENT NEWS HOOK (weave in naturally, at most once, attributed plainly in prose
 e.g. "Last week the Economic Times reported that ..." - never as a link dump).
@@ -297,6 +307,7 @@ def draft_post(note_text, triage_result, reference):
         note=note_text,
         angle=triage_result.get("angle", ""),
         category=triage_result.get("category", ""),
+        already_said=triage_result.get("already_said") or "nothing directly",
         reference=_format_reference(reference),
     )
     return _write_and_check(prompt)
