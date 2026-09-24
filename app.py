@@ -6,6 +6,7 @@
 No storage: each note is triaged and drafted within the request.
 """
 import hmac
+import os
 from collections import deque
 
 from flask import Flask, jsonify, request
@@ -20,11 +21,19 @@ app = Flask(__name__)
 _recent = deque(maxlen=500)
 
 
+REQUIRED_ENV = ["TELEGRAM_BOT_TOKEN", "GEMINI_API_KEY", "OWNER_CHAT_ID",
+                "SOURCE_CHANNEL_ID", "TELEGRAM_WEBHOOK_SECRET"]
+
+
 @app.get("/")
 def health():
+    # Names only, never values - so a missing setting can be spotted from the browser.
     return jsonify(ok=True, service="skinstinct-draft-bot",
                    owner_configured=bool(config.OWNER_CHAT_ID),
-                   webhook_secret_configured=bool(config.TELEGRAM_WEBHOOK_SECRET))
+                   webhook_secret_configured=bool(config.TELEGRAM_WEBHOOK_SECRET),
+                   env_missing=[k for k in REQUIRED_ENV if not os.getenv(k, "").strip()],
+                   vercel_env=os.getenv("VERCEL_ENV"),
+                   commit=(os.getenv("VERCEL_GIT_COMMIT_SHA") or "")[:7])
 
 
 @app.post("/api/webhook")
