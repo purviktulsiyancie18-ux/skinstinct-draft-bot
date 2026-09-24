@@ -1,63 +1,41 @@
 """Vercel entry point: the same bot, driven by a Telegram webhook instead of polling.
 
-    POST /api/webhook    Telegram delivers each update here (/telegram also works) (checked against TELEGRAM_WEBHOOK_SECRET)
-    GET  /cron/deliver   Vercel Cron, Mon/Wed/Fri 08:30 IST (checked against CRON_SECRET)
+    POST /api/webhook    Telegram delivers each update here (checked against TELEGRAM_WEBHOOK_SECRET)
     GET  /               health check
 
-Locally you can still run `python bot.py` (polling) instead - but not both at once.
+No storage: each note is triaged and drafted within the request.
 """
 import hmac
-import traceback
+from collections import deque
 
 from flask import Flask, jsonify, request
 
 import bot
 import config
-import store
 
 app = Flask(__name__)
 
-
-def _secret_ok(given, expected):
-    return bool(expected) and hmac.compare_digest(given or "", expected)
+# Telegram may redeliver an update while a slow draft is still running. A warm
+# instance remembers recent update ids so it doesn't draft the same note twice.
+_recent = deque(maxlen=500)
 
 
 @app.get("/")
 def health():
     return jsonify(ok=True, service="skinstinct-draft-bot",
                    owner_configured=bool(config.OWNER_CHAT_ID),
-                   database="postgres" if store.PG_URL else "sqlite (temporary - attach Postgres)")
+                   webhook_secret_configured=bool(config.TELEGRAM_WEBHOOK_SECRET))
 
 
 @app.post("/api/webhook")
-@app.post("/telegram")
 def telegram_webhook():
-    if not _secret_ok(request.headers.get("X-Telegram-Bot-Api-Secret-Token"), config.TELEGRAM_WEBHOOK_SECRET):
+    given = request.headers.get("X-Telegram-Bot-Api-Secret-Token") or ""
+    if not config.TELEGRAM_WEBHOOK_SECRET or not hmac.compare_digest(given, config.TELEGRAM_WEBHOOK_SECRET):
         return "forbidden", 403
     update = request.get_json(silent=True) or {}
-    conn = store.connect()
-    try:
-        # Telegram retries if a draft takes a while; handle each update once.
-        if "update_id" in update and store.claim(conn, f"update:{update['update_id']}"):
-            bot.handle(conn, update)
-    except Exception as exc:
-        traceback.print_exc()
-        if config.OWNER_CHAT_ID:
-            try:
-                bot.tg.send(config.OWNER_CHAT_ID, f"Something failed on my side, your note is saved: {exc}")
-            except Exception:
-                pass
-    finally:
-        conn.close()
+    update_id = update.get("update_id")
+    if update_id in _recent:
+        return "ok"
+    _recent.append(update_id)
+    bot.safe_handle(update)
     return "ok"  # always 200, otherwise Telegram keeps redelivering
-
-
-@app.get("/cron/deliver")
-def cron_deliver():
-    if not _secret_ok(request.headers.get("Authorization", "").removeprefix("Bearer "), config.CRON_SECRET):
-        return "forbidden", 403
-    conn = store.connect()
-    try:
-        return jsonify(result=bot.deliver_next(conn))
-    finally:
-        conn.close()

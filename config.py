@@ -33,20 +33,12 @@ TRIAGE_MODEL = os.getenv("GEMINI_TRIAGE_MODEL", "gemini-3.6-flash")
 RESEARCH_MODEL = os.getenv("GEMINI_RESEARCH_MODEL", "gemini-3.6-flash")
 DRAFT_MODEL = os.getenv("GEMINI_DRAFT_MODEL", "gemini-3.1-pro-preview")
 
-# Pacing: roughly three drafts a week, delivered on these days at this time.
-DELIVERY_DAYS = [d.strip().lower()[:3] for d in os.getenv("DELIVERY_DAYS", "mon,wed,fri").split(",") if d.strip()]
-DELIVERY_TIME = os.getenv("DELIVERY_TIME", "08:30")
-TIMEZONE = os.getenv("TIMEZONE", "Asia/Kolkata")
-
-# Notes scoring below this are discarded even if the model says "develop".
+# Notes scoring below this are never drafted, even if the model says "develop".
 MIN_SCORE = int(os.getenv("MIN_SCORE", "6"))
 
-# Vercel's filesystem is read-only except /tmp (only used if no Postgres is attached).
-DB_PATH = Path("/tmp/skinstinct_drafts.db") if os.getenv("VERCEL") else ROOT / os.getenv("DB_PATH", "skinstinct_drafts.db")
 
-# Webhook mode (Vercel): Telegram and Vercel Cron must present these.
+# Webhook mode (Vercel): Telegram must present this with every update.
 TELEGRAM_WEBHOOK_SECRET = os.getenv("TELEGRAM_WEBHOOK_SECRET", "").strip()
-CRON_SECRET = os.getenv("CRON_SECRET", "").strip()
 VOICE_GUIDE_PATH = ROOT / "Meera_Pillai_Voice_Guide.txt"
 PUBLISHED_DIR = ROOT / "voice" / "published"
 

@@ -1,6 +1,6 @@
 """The model steps - transcribe, triage, news hook, draft - plus a voice lint.
 
-Deliberately stops at a draft. There is no LinkedIn publishing or post-scheduling code
+Deliberately stops at a draft. There is no LinkedIn publishing or scheduling code
 anywhere in this project, by design (Meera's "Cut").
 
 Try a single note without Telegram:
@@ -119,7 +119,7 @@ FRAGMENT (received {received}):
 """
 
 
-def triage(note_text, received="recently"):
+def triage(note_text, received="just now"):
     resp = client().models.generate_content(
         model=config.TRIAGE_MODEL,
         contents=TRIAGE_PROMPT.format(note=note_text, received=received),
@@ -264,8 +264,25 @@ HARD RULES
    like [CHECK: our return rate for this product] rather than inventing it.
 4. Originality: do not reuse sentences from her published pieces. Same voice,
    new words.
-{feedback}
+
 Return only the post text."""
+
+REVISE_PROMPT = """Below is a LinkedIn draft you wrote as Meera Pillai, and her feedback on it.
+Revise the draft to apply the feedback. Keep everything she didn't ask to change.
+
+Keep all the same hard rules: her voice; 450-650 words unless she asks otherwise;
+prose paragraphs; no greeting, sign-off, hashtags, emojis, exclamation marks,
+bullets, bold or headers; spaced hyphen " - " as the dash; British spelling.
+Do not add new facts, numbers, dates or Skinstinct details that aren't already in
+the draft or her feedback - use [CHECK: ...] if something new is needed.
+
+HER FEEDBACK:
+\"\"\"{feedback}\"\"\"
+
+PREVIOUS DRAFT:
+\"\"\"{previous}\"\"\"
+
+Return only the revised post text."""
 
 
 def _format_reference(ref):
@@ -275,19 +292,21 @@ def _format_reference(ref):
             f"Key fact: {ref.get('key_fact')}\nRelevance: {ref.get('relevance')}")
 
 
-def draft_post(note_text, triage_result, reference, feedback=None, previous=None):
-    fb = ""
-    if feedback:
-        fb = f"\nMEERA'S FEEDBACK ON THE PREVIOUS DRAFT (apply it):\n{feedback}\n"
-        if previous:
-            fb += f"\nPREVIOUS DRAFT:\n\"\"\"{previous}\"\"\"\n"
+def draft_post(note_text, triage_result, reference):
     prompt = DRAFT_PROMPT.format(
         note=note_text,
         angle=triage_result.get("angle", ""),
         category=triage_result.get("category", ""),
         reference=_format_reference(reference),
-        feedback=fb,
     )
+    return _write_and_check(prompt)
+
+
+def revise_draft(previous, feedback):
+    return _write_and_check(REVISE_PROMPT.format(previous=previous, feedback=feedback))
+
+
+def _write_and_check(prompt):
     body = _generate_text(prompt)
 
     issues = lint(body)
