@@ -66,10 +66,14 @@ def ensure_webhook(force=False):
     if not (url and config.TELEGRAM_WEBHOOK_SECRET and config.TELEGRAM_BOT_TOKEN):
         return "cannot check (not on Vercel or settings missing)"
     current = tg._call("getWebhookInfo").get("url", "")
-    if current == url and not force:
-        return "ok"
-    if time.time() - _last_heal[0] < 30:
-        return "repair already in progress"
+    if current == url:
+        if not force:
+            return "ok"
+        # URL looks right but updates arrive unsigned (secret missing). Throttle so
+        # a stream of unsigned requests can't hammer setWebhook; a wrong URL is
+        # always fixed immediately.
+        if time.time() - _last_heal[0] < 30:
+            return "repair already in progress"
     _last_heal[0] = time.time()
     tg._call("setWebhook", url=url, secret_token=config.TELEGRAM_WEBHOOK_SECRET,
              allowed_updates=["message", "channel_post"])
