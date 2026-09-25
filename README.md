@@ -68,7 +68,9 @@ Triage report for an old backlog (Telegram Desktop -> Export chat history -> JSO
 https://api.telegram.org/bot<TOKEN>/setWebhook?url=https://<project>.vercel.app/api/webhook&secret_token=<TELEGRAM_WEBHOOK_SECRET>
 ```
 
-Without `secret_token`, every update is rejected with 403. Check with `.../bot<TOKEN>/getWebhookInfo`. Or run `.venv/bin/python set_webhook.py https://<project>.vercel.app`, and use `--delete` to go back to local polling.
+Or run `.venv/bin/python set_webhook.py https://<project>.vercel.app`, and use `--delete` to go back to local polling.
+
+**The webhook repairs itself.** If it gets registered without `secret_token` or with a wrong URL, for example by re-running a setWebhook link, the first unsigned update makes the bot re-register its own webhook: correct https URL plus secret. Telegram then retries that update, so no note is lost. Opening the health page (`https://<project>.vercel.app/`) also checks and repairs it. `"telegram_webhook": "ok"` means all is well.
 
 A draft takes 30-60 seconds and Vercel functions allow up to 300s. If Telegram redelivers a note while it is still drafting, a warm instance ignores the repeat. Rarely, a cold one may draft it twice.
 
